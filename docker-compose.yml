@@ -1,0 +1,63 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: worklog-postgres
+    environment:
+      POSTGRES_USER: worklog_user
+      POSTGRES_PASSWORD: worklog_password
+      POSTGRES_DB: worklog_pro
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U worklog_user -d worklog_pro']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: worklog-backend
+    environment:
+      DATABASE_URL: postgresql://worklog_user:worklog_password@postgres:5432/worklog_pro
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production-12345
+      JWT_EXPIRY: 7d
+      NODE_ENV: development
+      PORT: 5000
+    ports:
+      - '5000:5000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+    command: npm run dev
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: worklog-frontend
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+    ports:
+      - '3000:3000'
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+    command: npm run dev
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: worklog-network
